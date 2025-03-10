@@ -1,3 +1,13 @@
+-- Список исправлений.
+-- 1. Изменил имена колонок date на deal_date.
+-- 2. Добавил фильтрацию по году в задании №3.
+-- 3. Указал в явном виде тип джойна в задании №4.
+-- 4. Добавил оператор DISINCT в задание №5.
+-- 5. Исправил расчёт цены в задании №6.
+
+
+
+
 -- Этап 1. Создание и заполнение БД
 
 -- Создал схемы raw_data (Сырой слой данных)
@@ -9,7 +19,7 @@ CREATE TABLE IF NOT EXISTS raw_data.sales (
     auto varchar(50),
     gasoline_consumption varchar(50),
     price float4,
-    date varchar(50),
+    deal_date TIMESTAMP(50),
     person_name varchar(50),
     phone varchar(50),
     discount int4,
@@ -51,7 +61,7 @@ CREATE TABLE IF NOT EXISTS car_shop.sales(
     sale_id SERIAL PRIMARY KEY, -- Создание первичного ключа
     price DECIMAL(10, 2), -- Использую этот тип данных, т.к важна точность расчетов.
     discount DECIMAL(5, 2), -- Использую этот тип данных, т.к важна точность расчетов.
-    date TIMESTAMP, -- TIMESTAMP — это универсальный тип данных для хранения даты и времени.
+    deal_date TIMESTAMP, -- TIMESTAMP — это универсальный тип данных для хранения даты и времени.
     brand VARCHAR(50), -- Формат для хранения марки авто.
     origin_id INTEGER, -- Поле для внешнего ключа (FOREIGN KEY). 
     color_id INTEGER, -- Поле для внешнего ключа (FOREIGN KEY). 
@@ -111,7 +121,7 @@ FROM raw_data.sales;
 INSERT INTO car_shop.sales(
     price,
     discount,
-    date,
+    deal_date,
     brand,
     color_id,
     model_id,
@@ -121,7 +131,7 @@ INSERT INTO car_shop.sales(
 SELECT 
     price,
     discount,
-    date,
+    deal_date,
     SPLIT_PART(r.auto, ' ', 1) AS brand,
     color_id,
     model_id,
@@ -150,36 +160,37 @@ LEFT JOIN car_shop.specifications s ON c.spec_id = s.spec_id;
 ---- Задание 2. Напишите запрос, который покажет название бренда и среднюю цену его автомобилей в разбивке по всем годам с учётом скидки.
 SELECT
     brand AS brand_name,
-    EXTRACT(YEAR FROM date) AS year,
+    EXTRACT(YEAR FROM deal_date) AS year,
     AVG(price) AS price_avg
 FROM car_shop.sales
-GROUP BY brand, date
-ORDER BY brand ASC, date ASC; 
+GROUP BY brand, deal_date
+ORDER BY brand ASC, deal_date ASC; 
 ---- Задание 3. Посчитайте среднюю цену всех автомобилей с разбивкой по месяцам в 2022 году с учётом скидки.
 SELECT
-    EXTRACT(MONTH FROM date) AS month,
-    EXTRACT(YEAR FROM date) AS year,
+    EXTRACT(MONTH FROM deal_date) AS month,
+    EXTRACT(YEAR FROM deal_date) AS year,
     ROUND(AVG(price), 2) AS price_avg
 FROM car_shop.sales
-GROUP BY month, year
+WHERE EXTRACT(YEAR FROM deal_date) = 2022
+GROUP BY month, YEAR
 ORDER BY month ASC;
 ---- Задание 4. Напишите запрос, который выведет список купленных машин у каждого пользователя.
 SELECT name AS person, STRING_AGG(brand, ',') AS cars
-FROM car_shop.sales
-JOIN car_shop.car_models m USING(model_id)
-JOIN car_shop.customers c USING(customer_id)
+FROM car_shop.sales AS s
+JOIN car_shop.car_models m ON m.model_id = s.model_id
+JOIN car_shop.customers c ON c.customer_id = s.customer_id
 GROUP BY name;
 ---- Задание 5. Напишите запрос, который покажет количество всех пользователей из США.
-SELECT COUNT(name) AS persons_from_usa_count
+SELECT COUNT(DISTINCT name) AS persons_from_usa_count
 FROM car_shop.customers
 WHERE phone LIKE '+1%';
 ---- Задание 6. Напишите запрос, который вернёт самую большую и самую маленькую цену
 ---- продажи автомобиля с разбивкой по стране без учёта скидки. 
 ---- Цена в колонке price дана с учётом скидки.
 SELECT 
-    mc.brand_origin, 
-    MAX(price - discount ) AS price_max, 
-    MIN(price - discount) AS price_min
+    mc.brand_origin,
+    MAX(CAST(price / (1 - discount / 100) AS DECIMAL(12, 2))) AS price_max_without_discount,
+    MIN(CAST(price / (1 - discount / 100) AS DECIMAL(12, 2))) AS price_min_without_discount
 FROM car_shop.sales AS s
-JOIN car_shop.manufacturer_countries AS mc USING(origin_id)
+JOIN car_shop.manufacturer_countries AS mc ON s.origin_id = mc.origin_id
 GROUP BY mc.brand_origin;
